@@ -7,6 +7,28 @@ from __future__ import absolute_import, division, print_function
 from ansible_collections.ansible.posix.plugins.module_utils.version import LooseVersion
 from ansible.module_utils.basic import missing_required_lib
 
+try:
+    from ansible.module_utils.common import respawn
+except ImportError:
+    HAS_RESPAWN_UTIL = False
+else:
+    HAS_RESPAWN_UTIL = True
+
+
+def _respawn_module():
+    if respawn.has_respawned():
+        return
+    system_interpreters = (
+        "/usr/bin/libexec/platform-python",
+        "/usr/bin/python3",
+        "/usr/bin/python2",
+        "/usr/bin/python",
+    )
+    interpreter = respawn.probe_interpreters_for_module(system_interpreters, "firewall")
+    if interpreter:
+        respawn.respawn_module(interpreter)
+
+
 __metaclass__ = type
 
 
@@ -314,6 +336,8 @@ class FirewallTransaction(object):
                         installed version (%s) likely too old. Requires firewalld >= 0.2.11" % FW_VERSION)
 
         if import_failure:
+            if HAS_RESPAWN_UTIL:
+                _respawn_module()
             module.fail_json(
                 msg=missing_required_lib('firewall') + '. Version 0.2.11 or newer required (0.3.9 or newer for offline operations)'
             )
