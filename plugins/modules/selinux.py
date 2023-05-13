@@ -107,6 +107,27 @@ from ansible.module_utils.basic import AnsibleModule, missing_required_lib
 from ansible.module_utils.common.process import get_bin_path
 from ansible.module_utils.facts.utils import get_file_lines
 
+try:
+    from ansible.module_utils.common import respawn
+except ImportError:
+    HAS_RESPAWN_UTIL = False
+else:
+    HAS_RESPAWN_UTIL = True
+
+
+def _respawn_module():
+    if respawn.has_respawned():
+        return
+    system_interpreters = (
+        "/usr/bin/libexec/platform-python",
+        "/usr/bin/python3",
+        "/usr/bin/python2",
+        "/usr/bin/python",
+    )
+    interpreter = respawn.probe_interpreters_for_module(system_interpreters, "selinux")
+    if interpreter:
+        respawn.respawn_module(interpreter)
+
 
 # getter subroutines
 def get_config_state(configfile):
@@ -236,6 +257,8 @@ def main():
     )
 
     if not HAS_SELINUX:
+        if HAS_RESPAWN_UTIL:
+            _respawn_module()
         module.fail_json(msg=missing_required_lib('libselinux-python'), exception=SELINUX_IMP_ERR)
 
     # global vars
