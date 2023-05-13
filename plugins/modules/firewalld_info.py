@@ -215,6 +215,28 @@ from ansible_collections.ansible.posix.plugins.module_utils.version import Stric
 
 
 try:
+    from ansible.module_utils.common import respawn
+except ImportError:
+    HAS_RESPAWN_UTIL = False
+else:
+    HAS_RESPAWN_UTIL = True
+
+
+def _respawn_module():
+    if respawn.has_respawned():
+        return
+    system_interpreters = (
+        "/usr/bin/libexec/platform-python",
+        "/usr/bin/python3",
+        "/usr/bin/python2",
+        "/usr/bin/python",
+    )
+    interpreter = respawn.probe_interpreters_for_module(system_interpreters, "firewall")
+    if interpreter:
+        respawn.respawn_module(interpreter)
+
+
+try:
     import dbus
     HAS_DBUS = True
 except ImportError:
@@ -322,6 +344,12 @@ def main():
     )
 
     # Exit with failure message if requirements modules are not installed.
+    if not HAS_DBUS and not HAS_FIREWALLD and HAS_RESPAWN_UTIL:
+        # Only respawn the module if both libraries are missing.
+        # If only one is available, then usage of the "wrong" (i.e. not the system one)
+        # python interpreter is likely not the problem.
+        _respawn_module()
+
     if not HAS_DBUS:
         module.fail_json(msg=missing_required_lib('python-dbus'))
     if not HAS_FIREWALLD:
